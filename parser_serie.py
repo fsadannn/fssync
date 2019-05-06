@@ -12,6 +12,7 @@ else:
         MODULE = ""
 
 keep = set(['kun', 'sama'])
+
 tokens = re.compile('[a-zA-Z0-9!ñÑ\']+')
 normsp = re.compile('  +')
 daysstr = ['lunes', 'martes', 'mi[eé]rcoles', 'jueves', 'viernes', 's[áa]bado', 'domingo',
@@ -34,8 +35,8 @@ letn = re.compile('[0-9][a-z]',re.I)
 
 def transform(txt):
     res = []
-    for i in txt.split():
-        if i.lower() in stopwords:
+    for n,i in enumerate(txt.split()):
+        if i.lower() in stopwords and n!=0:
             res.append(i.lower())
         elif i == " ":
             continue
@@ -209,3 +210,5 @@ def rename_serie(txt):
     #print(toks,seps)
     res = process(toks, seps, {})
     return res['name'], res['cap']
+
+print(rename_serie('Game of Thrones 8x02 - A Knight of the Seven Kingdoms.MEMENTO.es-lat'))

@@ -2,7 +2,7 @@ import re
 import os
 import sys
 import json
-from parser_serie import rename_serie, transform
+from guessit import guessit
 
 if hasattr(sys, 'frozen'):
     MODULE = os.path.dirname(sys.executable)
@@ -12,15 +12,14 @@ else:
     except:
         MODULE = ""
 
-def editDistance(a, b, transf=True):
+subs_formats = set([".srt",".idx",".sub",".ssa",".ass"])
+
+def editDistance(a, b, lower=False):
         """Distancia de Leventein entre dos cadenas de texto.
             a,b son string
             devuelve un int
         """
-        if transf:
-            a = transform(a)
-            b = transform(b)
-        else:
+        if lower:
             a = a.lower()
             b = b.lower()
         m = []
@@ -38,22 +37,13 @@ def editDistance(a, b, transf=True):
         return ret
 
 
-eb = re.compile('\{.+\}|\(.+\)|\[.+\]')
-epi = re.compile('[Ee]pisodio|[Cc]ap[ií]tulo')
-split = re.compile('([0-9]+[xX]?[0-9]*) *-? *')
-normsp = re.compile('  +')
-endesp = re.compile(' +$')
-begesp = re.compile('^ +')
-formatt = re.compile(' *- *([0-9]+)')
+def parse_serie_guessit(title, params=None):
+    if not params:
+        params = '--json --no-default-config -E -t episode -c \"'+os.path.join(MODULE,'options.json\"')
+    a = guessit(title, params)
+    return a
 
+def temp_format(ss):
+    return '[Temp '+str(ss)+']'
 
-def rename(name, isserie=True):
-    err = False
-    txt, ext = os.path.splitext(name)
-    if isserie:
-        try:
-            t1, t2 = rename_serie(txt)
-        except (ValueError, IndexError):
-            return '', '', '', True
-        return t1, t2, ext, err
-    return transform(txt), '', ext, err
+temp_gap = len(temp_format('10'))
