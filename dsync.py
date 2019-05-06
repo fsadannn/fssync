@@ -11,12 +11,6 @@ from utils import temp_format, subs_formats, temp_gap
 from utils import editDistance
 from parser_serie import transform
 
-def parse(title):
-    params = '--json --no-default-config -E -t episode -c \"'+os.path.join(MODULE,'options.json\"')
-    a = guessit(title, params)
-    a = json.dumps(a,cls=GuessitEncoder, ensure_ascii=False)
-    return a
-
 class BadClassError(Exception):
     pass
 
@@ -51,7 +45,7 @@ class Movies(DSync):
 class SeriesAnimes(DSync):
 
     def __init__(self, source, dest):
-        super(Movies, self).__init__(source, dest)
+        super(SeriesAnimes, self).__init__(source, dest)
 
     def sync(self, keep_old = True):
         pass
@@ -63,7 +57,7 @@ class SeriesAnimes(DSync):
 class SeriesPerson(DSync):
 
     def __init__(self, source, dest):
-        super(Movies, self).__init__(source, dest)
+        super(SeriesPerson, self).__init__(source, dest)
 
     def organize(self):
         """Reorganize the folder, put each chapter of the same serie

@@ -210,5 +210,3 @@ def rename_serie(txt):
     #print(toks,seps)
     res = process(toks, seps, {})
     return res['name'], res['cap']
-
-print(rename_serie('Game of Thrones 8x02 - A Knight of the Seven Kingdoms.MEMENTO.es-lat'))
