@@ -2,6 +2,7 @@ import abc
 import os
 import sys
 import json
+import fs
 from fs.base import FS
 from fs.memoryfs import MemoryFS
 from fs.wrap import read_only, cache_directory
@@ -11,6 +12,10 @@ from utils import rename
 from utils import temp_format, subs_formats, temp_gap
 from utils import editDistance
 from parser_serie import transform
+
+MOVIE = 0
+ANIME = 1
+PSERIE = 2
 
 class BadClassError(Exception):
     pass
@@ -269,3 +274,12 @@ class SeriesPerson(DSync):
     def sync(self, keep_old = True):
         pass
 
+def organize(path, typee = PSERIE):
+    ff = fs.open_fs(path)
+    if typee == PSERIE:
+        tt = SeriesPerson(MemoryFS(),ff)
+    elif typee = ANIME:
+        tt = SeriesAnimes(MemoryFS(),ff)
+    else:
+        tt = Movies(MemoryFS(),ff)
+    tt.organize()
