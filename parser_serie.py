@@ -14,6 +14,7 @@ else:
 keep = set(['kun', 'sama'])
 
 tokens = re.compile('[a-zA-Z0-9!ñÑ\']+')
+tv = re.compile('[^a-zA-Z0-9ñÑ][tT][vV][^a-zA-Z0-9ñÑ]')
 normsp = re.compile('  +')
 daysstr = ['lunes', 'martes', 'mi[eé]rcoles', 'jueves', 'viernes', 's[áa]bado', 'domingo',
            'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -53,6 +54,7 @@ def clean(txt):
     txt = txt.replace('?','\?')
     txt = txt.replace('+','\+')
     txt = txt.replace('.','\.')
+    txt = tv.sub(' ',txt)
     txt = days.sub('', txt)
     txt = dates.sub('', txt)
     txt = resolution.sub('', txt)

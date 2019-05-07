@@ -3,6 +3,7 @@ import os
 import sys
 import json
 from guessit import guessit
+from parser_serie import rename_serie
 
 if hasattr(sys, 'frozen'):
     MODULE = os.path.dirname(sys.executable)
@@ -13,6 +14,35 @@ else:
         MODULE = ""
 
 subs_formats = set([".srt",".idx",".sub",".ssa",".ass"])
+video_formats = set([".3g2",
+                ".3gp",
+                ".3gp2",
+                ".asf",
+                ".avi",
+                ".divx",
+                ".flv",
+                ".mk3d",
+                ".m4v",
+                ".mk2",
+                ".mka",
+                ".mkv",
+                ".mov",
+                ".mp4",
+                ".mp4a",
+                ".mpeg",
+                ".mpg",
+                ".ogg",
+                ".ogm",
+                ".ogv",
+                ".ra",
+                ".ram",
+                ".rm",
+                ".ts",
+                ".wav",
+                ".webm",
+                ".wma",
+                ".wmv",
+                ".vob"])
 
 def editDistance(a, b, lower=False):
         """Distancia de Leventein entre dos cadenas de texto.
@@ -36,12 +66,27 @@ def editDistance(a, b, lower=False):
         ret = m[len(b)][len(a)]
         return ret
 
-
 def parse_serie_guessit(title, params=None):
     if not params:
         params = '--json --no-default-config -E -t episode -c \"'+os.path.join(MODULE,'options.json\"')
     a = guessit(title, params)
     return a
+
+def rename(name):
+    err = False
+    txt, ext = os.path.splitext(name)
+    try:
+        t1, t2 = rename_serie(txt)
+    except (ValueError, IndexError):
+        try:
+            rr = parse_serie_guessit(name)
+            ep = ''
+            if 'episode' in rr:
+                ep = rr['episode']
+            return rr['title'], ep, ext, False
+        except:
+            return txt, '', ext, True
+    return t1, t2, ext, bool(ext in video_formats), err
 
 def temp_format(ss):
     return '[Temp '+str(ss)+']'
