@@ -13,6 +13,29 @@ else:
     except:
         MODULE = ""
 
+
+class CapData:
+    def __init__(self, name, nameep, num, ext, informats, err):
+        self._things = {'title': name, 'episode_title': nameep, 'episode': num,
+                        'ext': ext, 'is_video': informats, 'error': err}
+        self._map = {0: name, 1: num, 2: ext, 3: informats, 4: nameep, 5: err}
+
+    def __getattr__(self, name):
+        classname = self.__class__.__name__
+        if name in self._things:
+            return self._things[name]
+        raise AttributeError("\'{classname}\' object has no attribute \'{name}\'".format(**locals()))
+
+    def __getitem__(self, item):
+        if item in self._things:
+            return self._things[item]
+        if item in self._map:
+            return self._map[item]
+        raise KeyError(str(self.__class__.__name__)+" don\'t have key "+str(item))
+
+    def __str__(self):
+        return str(self._things)
+
 subs_formats = set([".srt",".idx",".sub",".ssa",".ass"])
 video_formats = set([".3g2",
                 ".3gp",
@@ -44,6 +67,7 @@ video_formats = set([".3g2",
                 ".wmv",
                 ".vob"])
 
+
 def editDistance(a, b, lower=False):
         """Distancia de Leventein entre dos cadenas de texto.
             a,b son string
@@ -66,27 +90,34 @@ def editDistance(a, b, lower=False):
         ret = m[len(b)][len(a)]
         return ret
 
+
 def parse_serie_guessit(title, params=None):
     if not params:
         params = '--json --no-default-config -E -t episode -c \"'+os.path.join(MODULE,'options.json\"')
     a = guessit(title, params)
     return a
 
+
 def rename(name):
     err = False
     txt, ext = os.path.splitext(name)
     try:
-        t1, t2 = rename_serie(txt)
+        t1, t2, t3 = rename_serie(txt)
     except (ValueError, IndexError):
         try:
             rr = parse_serie_guessit(name)
             ep = ''
             if 'episode' in rr:
                 ep = rr['episode']
-            return rr['title'], ep, ext, False
+            ept = ''
+            if 'episode_title' in rr:
+                ept = rr['episode_title']
+            return CapData(rr['title'], ept, ep, ext, bool(ext in video_formats), err)
         except:
-            return txt, '', ext, True
-    return t1, t2, ext, bool(ext in video_formats), err
+            return CapData(txt, '', '', ext, bool(ext in video_formats), True)
+    data = {''}
+    return CapData(t1, t3, t2, ext, bool(ext in video_formats), err)
+
 
 def temp_format(ss):
     return '[Temp '+str(ss)+']'
