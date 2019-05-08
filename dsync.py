@@ -58,12 +58,19 @@ class DSync(metaclass=abc.ABCMeta):
         self._dest = dest
 
     @abc.abstractmethod
-    def sync(self):
+    def sync(self, workers=1, use_hash, collition):
         raise NotImplementedError
 
     @abc.abstractmethod
     def organize(self):
         raise NotImplementedError
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._source.close()
+        self._dest.close()
 
 
 class Movies(DSync):
@@ -71,8 +78,8 @@ class Movies(DSync):
     def __init__(self, source, dest):
         super(Movies, self).__init__(source, dest)
 
-    def sync(self, keep_old=True):
-        pass
+    def sync(self, workers=1, use_hash=True, collition=OVERWRITE):
+        assert workers >= 0
 
     def organize(self):
         pass
@@ -179,6 +186,7 @@ class SeriesAnimes(DSync):
                     ff.removetree(join('/',i.name))
 
     def sync(self, workers=1, use_hash=True, collition=OVERWRITE):
+        assert workers >= 0
         sc = self._source
         ram = self._make_temp_fs(sc)
         ff = self._dest
@@ -461,16 +469,33 @@ class SeriesPerson(DSync):
                 else:
                     ff.removetree(join('/',i.name))
 
-    def sync(self, keep_old = True):
-        pass
+    def sync(self, workers=1, use_hash=True, collition=OVERWRITE):
+        assert workers >= 0
 
 
 def organize(path, typee = PSERIE):
     ff = fs.open_fs(path)
     if typee == PSERIE:
-        tt = SeriesPerson(MemoryFS(), ff)
+        with SeriesPerson(MemoryFS(), ff) as tt:
+            tt.organize()
     elif typee == ANIME:
-        tt = SeriesAnimes(MemoryFS(), ff)
+        with SeriesAnimes(MemoryFS(), ff) as tt:
+            tt.organize()
     else:
-        tt = Movies(MemoryFS(), ff)
-    tt.organize()
+        with Movies(MemoryFS(), ff) as tt:
+            tt.organize()
+
+def sync(sc_path, dest_path, typee = ANIME, workers=1, use_hash=True, collition=OVERWRITE):
+    assert workers >= 0
+    ff = fs.open_fs(sc_path)
+    ff2 = fs.open_fs(dest_path)
+    if typee == PSERIE:
+        with SeriesPerson(ff2, ff) as tt:
+            tt.sync(workers, use_hash, collition)
+    elif typee == ANIME:
+        with SeriesAnimes(ff2, ff) as tt:
+            tt.sync(workers, use_hash, collition)
+    else:
+        with Movies(ff2, ff) as tt:
+            tt.sync(workers, use_hash, collition)
+
