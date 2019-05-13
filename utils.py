@@ -15,9 +15,10 @@ else:
 
 
 class CapData:
-    def __init__(self, name, nameep, num, ext, informats, err):
+    def __init__(self, name, nameep, num, ext, informats, err, season=None, mimetype=None):
         self._things = {'title': name, 'episode_title': nameep, 'episode': num,
-                        'ext': ext, 'is_video': informats, 'error': err}
+                        'ext': ext, 'is_video': informats, 'error': err,
+                        'mimetype': mimetype, 'season': season}
         self._map = {0: name, 1: num, 2: ext, 3: informats, 4: nameep, 5: err}
 
     def __getattr__(self, name):
@@ -94,8 +95,32 @@ def editDistance(a, b, lower=False):
 def parse_serie_guessit(title, params=None):
     if not params:
         params = '--json --no-default-config -E -t episode -c \"'+os.path.join(MODULE,'options.json\"')
+    txt, ext = os.path.splitext(title)
     a = guessit(title, params)
-    return a
+    titlee = a['title']
+    ept = ''
+    try:
+        ept = a['episode_title']
+    except:
+        pass
+    ep = ''
+    try:
+        ep = a['episode']
+    except:
+        pass
+    mime = None
+    try:
+        mime = a['mimetype']
+    except:
+        pass
+    ss = None
+    try:
+        ss = a['season']
+    except:
+        pass
+    dd = CapData(titlee, ept, ep, ext,  bool(ext in video_formats),
+            False, ss, mime)
+    return dd
 
 
 def rename(name):

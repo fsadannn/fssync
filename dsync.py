@@ -44,6 +44,31 @@ def hash_file(fsi, filename, algorithm='sha1'):
     return hasher.hexdigest()
 
 
+def hash_files(fsi1, filename1, fsi2, filename2, algorithm='sha1'):
+    """
+    Basic hash for a file
+    :param filename: file path
+    :param algorithm: see hashlib.algorithms_available
+    :return: hex hash
+    """
+    hasher1 = getattr(hashlib, algorithm)()
+    hasher2 = getattr(hashlib, algorithm)()
+    with fsi1.openbin(filename1, 'rb') as afile1:
+        with fsi2.openbin(filename2, 'rb') as afile2:
+            buf1 = afile1.read(BLOCKSIZE)
+            buf2 = afile2.read(BLOCKSIZE)
+            while buf1 and buf2:
+                hasher1.update(buf1)
+                hasher2.update(buf2)
+                if hasher1.digest() != hasher2.digest():
+                    return False
+                buf1 = afile1.read(BLOCKSIZE)
+                buf2 = afile2.read(BLOCKSIZE)
+            afile1.close()
+            afile2.close()
+    return True
+
+
 class BadClassError(Exception):
     pass
 
@@ -58,7 +83,7 @@ class DSync(metaclass=abc.ABCMeta):
         self._dest = dest
 
     @abc.abstractmethod
-    def sync(self, workers=1, use_hash, collition):
+    def sync(self, workers, use_hash, collition):
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -230,9 +255,9 @@ class SeriesAnimes(DSync):
                                     continue
                                 elif use_hash and i1.size == i2.size:
                                     ## if has the same size and hash is avaliable compare the hash
-                                    h1 = hash_file(sc, opth)
-                                    h2 = hash_file(ff, path2)
-                                    if h1 == h2:
+                                    # h1 = hash_file(sc, opth)
+                                    # h2 = hash_file(ff, path2)
+                                    if hash_files(sc, opth, ff, path2):
                                         ## if the has coincide are the same file 99.9%
                                         continue
                                     # if size are equal but hash are different we have a collition
@@ -262,6 +287,8 @@ class SeriesAnimes(DSync):
                                         copier.copy(sc, opth, ff, path2)
                                 else:
                                     copier.copy(sc, opth, ff, path2)
+                            elif pp.ext in subs_formats:
+                                copier.copy(sc, opth, ff, path2)
                             # if we have the chapter number
                             elif pp.episode:
                                 try:
@@ -300,9 +327,9 @@ class SeriesAnimes(DSync):
                                     elif use_hash and i1.size == i2.size:
                                         ## if has the same size and hash is avaliable compare the hash
                                         temppth = join(path, name)
-                                        h1 = hash_file(sc, opth)
-                                        h2 = hash_file(ff, temppth)
-                                        if h1 == h2:
+                                        # h1 = hash_file(sc, opth)
+                                        # h2 = hash_file(ff, temppth)
+                                        if hash_files(sc, opth, ff, temppth):
                                             continue
                                         # if size are equal but hash are different we have a collition
                                         if collition == OVERWRITE:
@@ -359,7 +386,7 @@ class SeriesPerson(DSync):
                 try:
                     if 'video' in pp['mimetype']:
                         fold = transform(pp['title'])
-                        if 'season' in pp:
+                        if pp.season:
                             fold += ' - '+temp_format(pp['season'])
                             fils.add((fold, 1))
                         else:
@@ -376,7 +403,7 @@ class SeriesPerson(DSync):
             for j in posprocsub:
                 pp = parse(j)
                 foldd = transform(pp['title'])
-                if 'season' in pp:
+                if pp.season:
                     fold = foldd + ' - '+temp_format(pp['season'])
                 else:
                     fold = foldd
@@ -412,7 +439,7 @@ class SeriesPerson(DSync):
             for j in posprocimg:
                 pp = parse(j)
                 foldd = transform(pp['title'])
-                if 'season' in pp:
+                if pp.season:
                     fold = foldd + ' - '+temp_format(pp['season'])
                 else:
                     fold = foldd
@@ -444,7 +471,7 @@ class SeriesPerson(DSync):
         # make virtual filesystem in ram with the final
         # organization of the filesystem
         ff = self._dest
-        self._make_temp_fs(ff)
+        ram = self._make_temp_fs(ff)
 
         # execute ram.tree() for see the structure in pretty format
         # reorganize the filesystem from the structure in the
@@ -471,6 +498,142 @@ class SeriesPerson(DSync):
 
     def sync(self, workers=1, use_hash=True, collition=OVERWRITE):
         assert workers >= 0
+        sc = self._source
+        ram = self._make_temp_fs(sc)
+        ff = self._dest
+        # execute ram.tree() for see the structure in pretty format
+        # reorganize the filesystem from the structure in the
+        # virtualfilesistem in ram
+        try:
+            data = set(ram.listdir('/'))
+            with sc.lock(), ff.lock():
+                _thread_safe = is_thread_safe(sc, ff)
+                with Copier(num_workers=workers if _thread_safe else 0) as copier:
+                    # iterate over the virtual structure( only folders un the 1st level)
+                    for fold in data:
+                        path = join('/', fold)
+                        if not(ff.exists(path)):
+                            ff.makedir(path)
+                        # iterate over files in each folder
+                        try:
+                            lsd = ram.listdir(path)
+                        except DirectoryExpected:
+                            copier.copy(sc, path, ff, path)
+                        for fil in lsd:
+                            pp = parse(fil)
+                            path2 = join(path, fil)
+                            opth = ram.readtext(join(path, fil))
+                            # if exist the file with the exactly transform name
+                            if ff.exists(path2):
+                                i1 = sc.getinfo(opth, namespaces=['details'])
+                                i2 = ff.getinfo(path2, namespaces=['details'])
+                                if i1.size < i2.size:
+                                    ## if the size of new is less than older du nothing
+                                    continue
+                                elif use_hash and i1.size == i2.size:
+                                    ## if has the same size and hash is avaliable compare the hash
+                                    # h1 = hash_file(sc, opth)
+                                    # h2 = hash_file(ff, path2)
+                                    if hash_files(sc, opth, ff, path2):
+                                        ## if the has coincide are the same file 99.9%
+                                        continue
+                                    # if size are equal but hash are different we have a collition
+                                    if collition == OVERWRITE:
+                                        copier.copy(sc, opth, ff, path2)
+                                    if collition == RENAME:
+                                        nn, ext = splitext(path2)
+                                        num = 2
+                                        temppth = nn+'_rename_'+str(num)+ext
+                                        while ff.exists(temppth):
+                                            num += 1
+                                            temppth = nn+'_rename_'+str(num)+ext
+                                        ff.move(path2, temppth)
+                                        copier.copy(sc, opth, ff, path2)
+                                elif not use_hash and i1.size == i2.size:
+                                    # if size are equal but don use hash we have a collition
+                                    if collition == OVERWRITE:
+                                        copier.copy(sc, opth, ff, path2)
+                                    if collition == RENAME:
+                                        nn, ext = splitext(path2)
+                                        num = 2
+                                        temppth = nn+'_rename_'+str(num)+ext
+                                        while ff.exists(temppth):
+                                            num += 1
+                                            temppth = nn+'_rename_'+str(num)+ext
+                                        ff.move(path2, temppth)
+                                        copier.copy(sc, opth, ff, path2)
+                                else:
+                                    copier.copy(sc, opth, ff, path2)
+                            elif pp.ext in subs_formats:
+                                copier.copy(sc, opth, ff, path2)
+                            elif 'image' in pp['mimetype']:
+                                copier.copy(sc, opth, ff, path2)
+                            # if we have the chapter number
+                            elif pp.episode:
+                                try:
+                                    my = int(str(pp.episode))
+                                except:
+                                    copier.copy(sc, opth, ff, path2)
+                                    continue
+                                name = ''
+                                fillt = pp.title
+                                for filee in ff.listdir(path):
+                                    pp2 = parse(filee)
+                                    if editDistance(pp2.title, fillt) < 3:
+                                        try:
+                                            my2 = int(str(pp2.episode))
+                                        except:
+                                            continue
+                                        if my2 == my:
+                                            name = filee
+                                            break
+                                # if we found a file with similar name and same chapter
+                                if name:
+                                    i1 = sc.getinfo(opth, namespaces=['details'])
+                                    i2 = ff.getinfo(join(path, name), namespaces=['details'])
+                                    if i1.size < i2.size:
+                                        ## if the size of new is less than older du nothing
+                                        continue
+                                    elif use_hash and i1.size == i2.size:
+                                        ## if has the same size and hash is avaliable compare the hash
+                                        temppth = join(path, name)
+                                        # h1 = hash_file(sc, opth)
+                                        # h2 = hash_file(ff, temppth)
+                                        if hash_files(sc, opth, ff, temppth):
+                                            continue
+                                        # if size are equal but hash are different we have a collition
+                                        if collition == OVERWRITE:
+                                            copier.copy(sc, opth, ff, temppth)
+                                        if collition == RENAME:
+                                            nn, ext = splitext(temppth)
+                                            num = 2
+                                            temppth2 = nn+'_rename_'+str(num)+ext
+                                            while ff.exists(temppth2):
+                                                num += 1
+                                                temppth2 = nn+'_rename_'+str(num)+ext
+                                            ff.move(temppth, temppth2)
+                                            copier.copy(sc, opth, ff, temppth)
+                                    elif not use_hash and i1.size == i2.size:
+                                        # if size are equal but don use hash we have a collition
+                                        if collition == OVERWRITE:
+                                            copier.copy(sc, opth, ff, temppth)
+                                        if collition == RENAME:
+                                            nn, ext = splitext(temppth)
+                                            num = 2
+                                            temppth2 = nn+'_rename_'+str(num)+ext
+                                            while ff.exists(temppth2):
+                                                num += 1
+                                                temppth2 = nn+'_rename_'+str(num)+ext
+                                            ff.move(temppth, temppth2)
+                                            copier.copy(sc, opth, ff, temppth)
+                                    else:
+                                        temppth = join(path, name)
+                                        copier.copy(sc, opth, ff, temppth)
+                                else:
+                                    copier.copy(sc, opth, ff, path2)
+
+        except BulkCopyFailed as e:
+            raise BulkCopyFailed(e.errors) ## do somthing with error late, for now just raise again
 
 
 def organize(path, typee = PSERIE):
@@ -485,7 +648,7 @@ def organize(path, typee = PSERIE):
         with Movies(MemoryFS(), ff) as tt:
             tt.organize()
 
-def sync(sc_path, dest_path, typee = ANIME, workers=1, use_hash=True, collition=OVERWRITE):
+def sync(sc_path, dest_path, typee = ANIME, workers=1, use_hash=False, collition=OVERWRITE):
     assert workers >= 0
     ff = fs.open_fs(sc_path)
     ff2 = fs.open_fs(dest_path)
@@ -498,4 +661,3 @@ def sync(sc_path, dest_path, typee = ANIME, workers=1, use_hash=True, collition=
     else:
         with Movies(ff2, ff) as tt:
             tt.sync(workers, use_hash, collition)
-
