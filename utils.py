@@ -3,7 +3,7 @@ import os
 import sys
 import json
 from guessit import guessit
-from parser_serie import rename_serie
+from .parser_serie import rename_serie
 
 if hasattr(sys, 'frozen'):
     MODULE = os.path.dirname(sys.executable)

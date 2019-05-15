@@ -11,11 +11,11 @@ from fs.path import join, splitext
 from fs._bulk import Copier
 from fs.errors import BulkCopyFailed, DirectoryExpected
 from fs.tools import is_thread_safe
-from utils import parse_serie_guessit as parse
-from utils import rename
-from utils import temp_format, subs_formats, temp_gap
-from utils import editDistance
-from parser_serie import transform
+from .utils import parse_serie_guessit as parse
+from .utils import rename
+from .utils import temp_format, subs_formats, temp_gap
+from .utils import editDistance
+from .parser_serie import transform
 
 MOVIE = 0
 ANIME = 1
