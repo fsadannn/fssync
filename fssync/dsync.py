@@ -11,11 +11,11 @@ from fs.path import join, splitext
 from fs._bulk import Copier
 from fs.errors import BulkCopyFailed, DirectoryExpected
 from fs.tools import is_thread_safe
-from utils import parse_serie_guessit as parse
-from utils import rename
-from utils import temp_format, subs_formats, temp_gap
-from utils import editDistance
-from parser_serie import transform
+from .utils import parse_serie_guessit as parse
+from .utils import rename
+from .utils import temp_format, subs_formats, temp_gap
+from .utils import editDistance
+from .parser_serie import transform
 
 MOVIE = 0
 ANIME = 1
@@ -650,8 +650,8 @@ def organize(path, typee = PSERIE):
 
 def sync(sc_path, dest_path, typee = ANIME, workers=1, use_hash=False, collition=OVERWRITE):
     assert workers >= 0
-    ff = fs.open_fs(sc_path)
-    ff2 = fs.open_fs(dest_path)
+    ff2 = fs.open_fs(sc_path)
+    ff = fs.open_fs(dest_path)
     if typee == PSERIE:
         with SeriesPerson(ff2, ff) as tt:
             tt.sync(workers, use_hash, collition)

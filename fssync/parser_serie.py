@@ -2,7 +2,7 @@ import re
 import os
 import sys
 import json
-from stopwords import stopwords
+from .stopwords import stopwords
 if hasattr(sys, 'frozen'):
     MODULE = os.path.dirname(sys.executable)
 else:
