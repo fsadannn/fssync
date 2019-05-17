@@ -345,6 +345,7 @@ class SeriesAnimes(DSync):
                                             copier.copy(sc, opth, ff, temppth)
                                     elif not use_hash and i1.size == i2.size:
                                         # if size are equal but don use hash we have a collition
+                                        temppth = join(path, name)
                                         if collition == OVERWRITE:
                                             copier.copy(sc, opth, ff, temppth)
                                         if collition == RENAME:
@@ -615,6 +616,7 @@ class SeriesPerson(DSync):
                                             copier.copy(sc, opth, ff, temppth)
                                     elif not use_hash and i1.size == i2.size:
                                         # if size are equal but don use hash we have a collition
+                                        temppth = join(path, name)
                                         if collition == OVERWRITE:
                                             copier.copy(sc, opth, ff, temppth)
                                         if collition == RENAME:
