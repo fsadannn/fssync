@@ -8,7 +8,7 @@ from fs.base import FS
 from fs.memoryfs import MemoryFS
 from fs.wrap import read_only, cache_directory
 from fs.path import join, splitext
-from fs._bulk import Copier
+from copier import Copier
 from fs.errors import BulkCopyFailed, DirectoryExpected
 from fs.tools import is_thread_safe
 from .utils import parse_serie_guessit as parse
@@ -125,7 +125,8 @@ class SeriesAnimes(DSync):
             posprocsub = []
             fils = set()
             for j in files:
-                if splitext(j.name)[1] in subs_formats and path!="/":
+                # if splitext(j.name)[1] in subs_formats and path!="/":
+                if splitext(j.name)[1] in subs_formats:
                     posprocsub.append(j.name)
                     continue
                 pp = rename(j.name)
@@ -153,7 +154,7 @@ class SeriesAnimes(DSync):
                     best = None
                     gap = 3
                     for i in fils:
-                        n = editDistance(i,foldd)
+                        n = editDistance(i,foldd, True)
                         if n < 3 and n < gap:
                             best=i
                             gap=n
@@ -366,6 +367,160 @@ class SeriesAnimes(DSync):
         except BulkCopyFailed as e:
             raise BulkCopyFailed(e.errors) ## do somthing with error late, for now just raise again
 
+    def sync_callback(callback, use_hash=False, collition=OVERWRITE):
+        sc = self._source
+        ram = self._make_temp_fs(sc)
+        ff = self._dest
+        # execute ram.tree() for see the structure in pretty format
+        # reorganize the filesystem from the structure in the
+        # virtualfilesistem in ram
+        try:
+            data = set(ram.listdir('/'))
+            with sc.lock(), ff.lock():
+                with Copier(num_workers=1) as copier:
+                    # iterate over the virtual structure( only folders un the 1st level)
+                    for fold in data:
+                        path = join('/', fold)
+                        if not(ff.exists(path)):
+                            ff.makedir(path)
+                        # iterate over files in each folder
+                        try:
+                            lsd = ram.listdir(path)
+                        except DirectoryExpected:
+                            copier.copy(sc, path, ff, path, callback)
+                        for fil in lsd:
+                            pp = rename(fil)
+                            if pp.episode:
+                                fill = transform(pp.title)+' - '+str(pp.episode)
+                                fillt = fill
+                            else:
+                                fill = transform(pp.title)
+                                fillt = fill
+                            if pp.episode_title:
+                                fill = fill + ' - ' + str(pp.episode_title)
+                            fill += pp.ext
+                            path2 = join(path, fill)
+                            opth = ram.readtext(join(path, fil))
+                            # if exist the file with the exactly transform name
+                            if ff.exists(path2):
+                                i1 = sc.getinfo(opth, namespaces=['details'])
+                                i2 = ff.getinfo(path2, namespaces=['details'])
+                                if i1.size < i2.size:
+                                    ## if the size of new is less than older du nothing
+                                    continue
+                                elif use_hash and i1.size == i2.size:
+                                    ## if has the same size and hash is avaliable compare the hash
+                                    # h1 = hash_file(sc, opth)
+                                    # h2 = hash_file(ff, path2)
+                                    if hash_files(sc, opth, ff, path2):
+                                        ## if the has coincide are the same file 99.9%
+                                        continue
+                                    # if size are equal but hash are different we have a collition
+                                    if collition == OVERWRITE:
+                                        copier.copy(sc, opth, ff, path2, callback)
+                                    if collition == RENAME:
+                                        nn, ext = splitext(path2)
+                                        num = 2
+                                        temppth = nn+'_rename_'+str(num)+ext
+                                        while ff.exists(temppth):
+                                            num += 1
+                                            temppth = nn+'_rename_'+str(num)+ext
+                                        ff.move(path2, temppth)
+                                        copier.copy(sc, opth, ff, path2, callback)
+                                elif not use_hash and i1.size == i2.size:
+                                    # if size are equal but don use hash we have a collition
+                                    if collition == OVERWRITE:
+                                        copier.copy(sc, opth, ff, path2)
+                                    if collition == RENAME:
+                                        nn, ext = splitext(path2)
+                                        num = 2
+                                        temppth = nn+'_rename_'+str(num)+ext
+                                        while ff.exists(temppth):
+                                            num += 1
+                                            temppth = nn+'_rename_'+str(num)+ext
+                                        ff.move(path2, temppth)
+                                        copier.copy(sc, opth, ff, path2, callback)
+                                else:
+                                    copier.copy(sc, opth, ff, path2, callback)
+                            elif pp.ext in subs_formats:
+                                copier.copy(sc, opth, ff, path2, callback)
+                            # if we have the chapter number
+                            elif pp.episode:
+                                try:
+                                    if 'x' in str(pp.episode):
+                                        my = int(str(pp.episode).split('x')[1])
+                                    elif 'X' in str(pp.episode):
+                                        my = int(str(pp.episode).split('X')[1])
+                                    else:
+                                        my = int(str(pp.episode))
+                                except:
+                                    copier.copy(sc, opth, ff, path2, callback)
+                                    continue
+                                name = ''
+                                for filee in ff.listdir(path):
+                                    pp2 = rename(filee)
+                                    if editDistance(pp2.title, fillt) < 3:
+                                        try:
+                                            if 'x' in str(pp2.episode):
+                                                my2 = int(str(pp2.episode).split('x')[1])
+                                            elif 'X' in str(pp2.episode):
+                                                my2 = int(str(pp2.episode).split('X')[1])
+                                            else:
+                                                my2 = int(str(pp2.episode))
+                                        except:
+                                            continue
+                                        if my2 == my:
+                                            name = filee
+                                            break
+                                # if we found a file with similar name and same chapter
+                                if name:
+                                    i1 = sc.getinfo(opth, namespaces=['details'])
+                                    i2 = ff.getinfo(join(path, name), namespaces=['details'])
+                                    if i1.size < i2.size:
+                                        ## if the size of new is less than older du nothing
+                                        continue
+                                    elif use_hash and i1.size == i2.size:
+                                        ## if has the same size and hash is avaliable compare the hash
+                                        temppth = join(path, name)
+                                        # h1 = hash_file(sc, opth)
+                                        # h2 = hash_file(ff, temppth)
+                                        if hash_files(sc, opth, ff, temppth):
+                                            continue
+                                        # if size are equal but hash are different we have a collition
+                                        if collition == OVERWRITE:
+                                            copier.copy(sc, opth, ff, temppth, callback)
+                                        if collition == RENAME:
+                                            nn, ext = splitext(temppth)
+                                            num = 2
+                                            temppth2 = nn+'_rename_'+str(num)+ext
+                                            while ff.exists(temppth2):
+                                                num += 1
+                                                temppth2 = nn+'_rename_'+str(num)+ext
+                                            ff.move(temppth, temppth2)
+                                            copier.copy(sc, opth, ff, temppth, callback)
+                                    elif not use_hash and i1.size == i2.size:
+                                        # if size are equal but don use hash we have a collition
+                                        temppth = join(path, name)
+                                        if collition == OVERWRITE:
+                                            copier.copy(sc, opth, ff, temppth, callback)
+                                        if collition == RENAME:
+                                            nn, ext = splitext(temppth)
+                                            num = 2
+                                            temppth2 = nn+'_rename_'+str(num)+ext
+                                            while ff.exists(temppth2):
+                                                num += 1
+                                                temppth2 = nn+'_rename_'+str(num)+ext
+                                            ff.move(temppth, temppth2)
+                                            copier.copy(sc, opth, ff, temppth, callback)
+                                    else:
+                                        temppth = join(path, name)
+                                        copier.copy(sc, opth, ff, temppth, callback)
+                                else:
+                                    copier.copy(sc, opth, ff, path2, callback)
+
+        except BulkCopyFailed as e:
+            raise BulkCopyFailed(e.errors) ## do somthing with error late, for now just raise again
+
 
 class SeriesPerson(DSync):
 
@@ -380,7 +535,8 @@ class SeriesPerson(DSync):
             posprocimg = []
             fils = set()
             for j in files:
-                if splitext(j.name)[1] in subs_formats and path!="/":
+                # if splitext(j.name)[1] in subs_formats and path!="/":
+                if splitext(j.name)[1] in subs_formats:
                     posprocsub.append(j.name)
                     continue
                 pp = parse(j.name)
@@ -633,6 +789,144 @@ class SeriesPerson(DSync):
                                         copier.copy(sc, opth, ff, temppth)
                                 else:
                                     copier.copy(sc, opth, ff, path2)
+
+        except BulkCopyFailed as e:
+            raise BulkCopyFailed(e.errors) ## do somthing with error late, for now just raise again
+
+    def sync_callback(self, callback, use_hash=True, collition=OVERWRITE):
+        sc = self._source
+        ram = self._make_temp_fs(sc)
+        ff = self._dest
+        # execute ram.tree() for see the structure in pretty format
+        # reorganize the filesystem from the structure in the
+        # virtualfilesistem in ram
+        try:
+            data = set(ram.listdir('/'))
+            with sc.lock(), ff.lock():
+                with Copier(num_workers=1) as copier:
+                    # iterate over the virtual structure( only folders un the 1st level)
+                    for fold in data:
+                        path = join('/', fold)
+                        if not(ff.exists(path)):
+                            ff.makedir(path)
+                        # iterate over files in each folder
+                        try:
+                            lsd = ram.listdir(path)
+                        except DirectoryExpected:
+                            copier.copy(sc, path, ff, path)
+                        for fil in lsd:
+                            pp = parse(fil)
+                            path2 = join(path, fil)
+                            opth = ram.readtext(join(path, fil))
+                            # if exist the file with the exactly transform name
+                            if ff.exists(path2):
+                                i1 = sc.getinfo(opth, namespaces=['details'])
+                                i2 = ff.getinfo(path2, namespaces=['details'])
+                                if i1.size < i2.size:
+                                    ## if the size of new is less than older du nothing
+                                    continue
+                                elif use_hash and i1.size == i2.size:
+                                    ## if has the same size and hash is avaliable compare the hash
+                                    # h1 = hash_file(sc, opth)
+                                    # h2 = hash_file(ff, path2)
+                                    if hash_files(sc, opth, ff, path2):
+                                        ## if the has coincide are the same file 99.9%
+                                        continue
+                                    # if size are equal but hash are different we have a collition
+                                    if collition == OVERWRITE:
+                                        copier.copy(sc, opth, ff, path2, callback)
+                                    if collition == RENAME:
+                                        nn, ext = splitext(path2)
+                                        num = 2
+                                        temppth = nn+'_rename_'+str(num)+ext
+                                        while ff.exists(temppth):
+                                            num += 1
+                                            temppth = nn+'_rename_'+str(num)+ext
+                                        ff.move(path2, temppth)
+                                        copier.copy(sc, opth, ff, path2, callback)
+                                elif not use_hash and i1.size == i2.size:
+                                    # if size are equal but don use hash we have a collition
+                                    if collition == OVERWRITE:
+                                        copier.copy(sc, opth, ff, path2, callback)
+                                    if collition == RENAME:
+                                        nn, ext = splitext(path2)
+                                        num = 2
+                                        temppth = nn+'_rename_'+str(num)+ext
+                                        while ff.exists(temppth):
+                                            num += 1
+                                            temppth = nn+'_rename_'+str(num)+ext
+                                        ff.move(path2, temppth)
+                                        copier.copy(sc, opth, ff, path2, callback)
+                                else:
+                                    copier.copy(sc, opth, ff, path2, callback)
+                            elif pp.ext in subs_formats:
+                                copier.copy(sc, opth, ff, path2, callback)
+                            elif 'image' in pp['mimetype']:
+                                copier.copy(sc, opth, ff, path2, callback)
+                            # if we have the chapter number
+                            elif pp.episode:
+                                try:
+                                    my = int(str(pp.episode))
+                                except:
+                                    copier.copy(sc, opth, ff, path2, callback)
+                                    continue
+                                name = ''
+                                fillt = pp.title
+                                for filee in ff.listdir(path):
+                                    pp2 = parse(filee)
+                                    if editDistance(pp2.title, fillt) < 3:
+                                        try:
+                                            my2 = int(str(pp2.episode))
+                                        except:
+                                            continue
+                                        if my2 == my:
+                                            name = filee
+                                            break
+                                # if we found a file with similar name and same chapter
+                                if name:
+                                    i1 = sc.getinfo(opth, namespaces=['details'])
+                                    i2 = ff.getinfo(join(path, name), namespaces=['details'])
+                                    if i1.size < i2.size:
+                                        ## if the size of new is less than older du nothing
+                                        continue
+                                    elif use_hash and i1.size == i2.size:
+                                        ## if has the same size and hash is avaliable compare the hash
+                                        temppth = join(path, name)
+                                        # h1 = hash_file(sc, opth)
+                                        # h2 = hash_file(ff, temppth)
+                                        if hash_files(sc, opth, ff, temppth):
+                                            continue
+                                        # if size are equal but hash are different we have a collition
+                                        if collition == OVERWRITE:
+                                            copier.copy(sc, opth, ff, temppth, callback)
+                                        if collition == RENAME:
+                                            nn, ext = splitext(temppth)
+                                            num = 2
+                                            temppth2 = nn+'_rename_'+str(num)+ext
+                                            while ff.exists(temppth2):
+                                                num += 1
+                                                temppth2 = nn+'_rename_'+str(num)+ext
+                                            ff.move(temppth, temppth2)
+                                            copier.copy(sc, opth, ff, temppth, callback)
+                                    elif not use_hash and i1.size == i2.size:
+                                        # if size are equal but don use hash we have a collition
+                                        temppth = join(path, name)
+                                        if collition == OVERWRITE:
+                                            copier.copy(sc, opth, ff, temppth, callback)
+                                        if collition == RENAME:
+                                            nn, ext = splitext(temppth)
+                                            num = 2
+                                            temppth2 = nn+'_rename_'+str(num)+ext
+                                            while ff.exists(temppth2):
+                                                num += 1
+                                                temppth2 = nn+'_rename_'+str(num)+ext
+                                            ff.move(temppth, temppth2)
+                                            copier.copy(sc, opth, ff, temppth, callback)
+                                    else:
+                                        temppth = join(path, name)
+                                        copier.copy(sc, opth, ff, temppth, callback)
+                                else:
+                                    copier.copy(sc, opth, ff, path2, callback)
 
         except BulkCopyFailed as e:
             raise BulkCopyFailed(e.errors) ## do somthing with error late, for now just raise again

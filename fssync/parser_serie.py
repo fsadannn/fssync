@@ -184,6 +184,7 @@ def process(toks, seps, data={}, deep=0, nep = True):
             data['pos']=len(name['toks'])+10
         namee = ''
         nameep = ''
+        after = ''
         check = False
         for nn, (tok, sep) in enumerate(zip(name['toks'], name['seps'])):
             if nn == data['pos']:
@@ -192,30 +193,38 @@ def process(toks, seps, data={}, deep=0, nep = True):
                 if check:
                     if tok in keep:
                         namee += '-'
+                    elif upperm.search(tok) and upperm.search(after):
+                        namee += '-'
                     else:
                         namee += ' '
                     check = False
                 if sep == '-':
                     check = True
                     namee += tok
+                    after = tok
                 else:
                     check = False
                     namee += tok
                     namee += ' '
+                    after = ''
             else:
                 if check:
                     if tok in keep:
                         nameep += '-'
+                    elif upperm.search(tok) and upperm.search(after):
+                        namee += '-'
                     else:
                         nameep += ' '
                     check = False
                 if sep == '-':
                     check = True
                     nameep += tok
+                    after = tok
                 else:
                     check = False
                     nameep += tok
                     nameep += ' '
+                    after = ''
         namee = transform(namee)
         nameep = transform(nameep)
         data['name'] = namee
