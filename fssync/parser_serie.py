@@ -2,7 +2,7 @@ import re
 import os
 import sys
 import json
-from stopwords import stopwords
+from .stopwords import stopwords
 if hasattr(sys, 'frozen'):
     MODULE = os.path.dirname(sys.executable)
 else:
@@ -12,7 +12,9 @@ else:
         MODULE = ""
 
 keep = set(['kun', 'sama'])
+
 tokens = re.compile('[a-zA-Z0-9!ñÑ\']+')
+tv = re.compile('[^a-zA-Z0-9ñÑ][tT][vV][^a-zA-Z0-9ñÑ]')
 normsp = re.compile('  +')
 daysstr = ['lunes', 'martes', 'mi[eé]rcoles', 'jueves', 'viernes', 's[áa]bado', 'domingo',
            'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -34,8 +36,8 @@ letn = re.compile('[0-9][a-z]',re.I)
 
 def transform(txt):
     res = []
-    for i in txt.split():
-        if i.lower() in stopwords:
+    for n,i in enumerate(txt.split()):
+        if i.lower() in stopwords and n!=0:
             res.append(i.lower())
         elif i == " ":
             continue
@@ -52,6 +54,7 @@ def clean(txt):
     txt = txt.replace('?','\?')
     txt = txt.replace('+','\+')
     txt = txt.replace('.','\.')
+    txt = tv.sub(' ',txt)
     txt = days.sub('', txt)
     txt = dates.sub('', txt)
     txt = resolution.sub('', txt)
@@ -89,7 +92,7 @@ def parse(txt):
     return toks, seps
 
 
-def process(toks, seps, data={}, deep=0):
+def process(toks, seps, data={}, deep=0, nep = True):
     # proc []{}()
     while len(seps) != len(toks):
         seps = seps+['']
@@ -98,9 +101,11 @@ def process(toks, seps, data={}, deep=0):
         if ff:
             data['cap'] = ff.group()
             data['name'] = captemp.sub('', toks[0], 1)
+            data['nameep'] = ''
         else:
             data['cap'] = ''
             data['name'] = toks[0]
+            data['nameep'] = ''
         return data
     ungrouptoks = []
     ungroupseps = []
@@ -176,27 +181,54 @@ def process(toks, seps, data={}, deep=0):
             data['pos'] = capcandidate[0][2]
     if deep == 0:
         if not('pos' in data):
-            data['pos']=-1
+            data['pos']=len(name['toks'])+10
         namee = ''
+        nameep = ''
+        after = ''
         check = False
         for nn, (tok, sep) in enumerate(zip(name['toks'], name['seps'])):
             if nn == data['pos']:
                 continue
-            if check:
-                if tok in keep:
-                    namee += '-'
+            if nn < data['pos']:
+                if check:
+                    if tok in keep:
+                        namee += '-'
+                    elif upperm.search(tok) and upperm.search(after):
+                        namee += '-'
+                    else:
+                        namee += ' '
+                    check = False
+                if sep == '-':
+                    check = True
+                    namee += tok
+                    after = tok
                 else:
+                    check = False
+                    namee += tok
                     namee += ' '
-                check = False
-            if sep == '-':
-                check = True
-                namee += tok
+                    after = ''
             else:
-                check = False
-                namee += tok
-                namee += ' '
+                if check:
+                    if tok in keep:
+                        nameep += '-'
+                    elif upperm.search(tok) and upperm.search(after):
+                        namee += '-'
+                    else:
+                        nameep += ' '
+                    check = False
+                if sep == '-':
+                    check = True
+                    nameep += tok
+                    after = tok
+                else:
+                    check = False
+                    nameep += tok
+                    nameep += ' '
+                    after = ''
         namee = transform(namee)
+        nameep = transform(nameep)
         data['name'] = namee
+        data['nameep'] = nameep
     if deep == 0:
         data.pop('capcandidate')
         data.pop('pos')
@@ -208,4 +240,4 @@ def rename_serie(txt):
     toks, seps = parse(cc)
     #print(toks,seps)
     res = process(toks, seps, {})
-    return res['name'], res['cap']
+    return res['name'], res['cap'], res['nameep']

@@ -1,8 +1,12 @@
 appdirs==1.4.3
+babelfish==0.5.5
 fs==2.4.4
 fs-hash==0.0.7
 fs.smbfs==0.5.2
+guessit==3.0.3
 pyasn1==0.4.5
 pysmb==1.1.27
+python-dateutil==2.8.0
 pytz==2019.1
+rebulk==1.0.0
 six==1.12.0
